@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -353,7 +354,7 @@ input[type=checkbox]{accent-color:var(--ac);width:13px;height:13px;cursor:pointe
     </div>
     <input id="login-pw" type="password" placeholder="Digite sua senha..." 
       style="width:100%;box-sizing:border-box;background:var(--s2);border:1px solid var(--bd2);border-radius:8px;color:var(--t1);font-family:'DM Sans',sans-serif;font-size:14px;padding:10px 14px;margin-bottom:8px;outline:none"
-      onkeydown="if(event.key==='Enter')doLogin()">
+      onkeydown="if(event.key==='Enter'){doLogin();}">
     <div id="login-err" style="font-size:12px;color:var(--rd);height:18px;margin-bottom:8px"></div>
     <button onclick="doLogin()" style="width:100%;background:var(--ac);color:#fff;border:none;border-radius:8px;padding:11px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer">
       Entrar →
@@ -553,27 +554,45 @@ input[type=checkbox]{accent-color:var(--ac);width:13px;height:13px;cursor:pointe
 
 <script>
 // ═══ LOGIN ══════════════════════════
-var APP_PASSWORD = 'taskflow2024'; // Change this to your password
+var _APP_PW = 'taskflow2024';
 var _authed = false;
 
 function checkSession(){
-  var s=sessionStorage.getItem('tf_auth');
-  if(s===APP_PASSWORD){_authed=true;ge('login-screen').style.display='none';}
-  else{ge('login-screen').style.display='flex';setTimeout(function(){var pw=ge('login-pw');if(pw)pw.focus();},100);}
+  try{
+    var s=localStorage.getItem('tf_auth');
+    if(s==='ok'){_authed=true;var ls=document.getElementById('login-screen');if(ls)ls.style.display='none';return;}
+  }catch(e){}
+  var ls=document.getElementById('login-screen');
+  if(ls)ls.style.display='flex';
+  setTimeout(function(){var pw=document.getElementById('login-pw');if(pw)pw.focus();},100);
 }
-window.doLogout=function(){sessionStorage.removeItem('tf_auth');_authed=false;ge('login-screen').style.display='flex';var pw=ge('login-pw');if(pw){pw.value='';pw.focus();}};
+
+window.doLogout=function(){
+  try{localStorage.removeItem('tf_auth');}catch(e){}
+  _authed=false;
+  var ls=document.getElementById('login-screen');
+  if(ls)ls.style.display='flex';
+  var pw=document.getElementById('login-pw');
+  if(pw){pw.value='';pw.focus();}
+};
+
 window.doLogin=function(){
-  var pw=ge('login-pw');var err=ge('login-err');
-  if(!pw||!err)return;
-  if(pw.value===APP_PASSWORD){
+  var pw=document.getElementById('login-pw');
+  var err=document.getElementById('login-err');
+  if(!pw)return;
+  var val=pw.value||'';
+  if(val===_APP_PW){
     _authed=true;
-    sessionStorage.setItem('tf_auth',APP_PASSWORD);
-    ge('login-screen').style.display='none';
-    if(_supa){loadFromSupabase().catch(function(){});}
+    try{localStorage.setItem('tf_auth','ok');}catch(e){}
+    var ls=document.getElementById('login-screen');
+    if(ls)ls.style.display='none';
+    if(typeof loadFromSupabase==='function'&&typeof _supa!=='undefined'&&_supa){
+      loadFromSupabase().catch(function(){});
+    }
   }else{
-    err.textContent='Senha incorreta. Tente novamente.';
+    if(err)err.textContent='Senha incorreta. Tente novamente.';
     pw.value='';pw.focus();
-    setTimeout(function(){err.textContent='';},3000);
+    setTimeout(function(){if(err)err.textContent='';},3000);
   }
 };
 
