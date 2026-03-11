@@ -661,7 +661,7 @@ async function sbUpsert(table,row){
 }
 async function sbDelete(table,id){
   if(!_supa)return;
-  try{await _supa.from(table).delete().eq('id',id);}catch(e){}
+  try{_supa.from(table).delete().eq('id',id).then(function(){}).catch(function(e){console.warn('sbDelete error',e);});}catch(e){}
 }
 async function sbUpsertProject(row){
   if(!_supa)return;
@@ -814,7 +814,18 @@ function popSelects(){
 window.toggleSel=function(id,checked){if(checked){if(selIds.indexOf(id)<0)selIds.push(id);}else{selIds=selIds.filter(function(x){return x!==id;});}renderSelBar();};
 window.toggleAll=function(checked,ids){if(checked){ids.forEach(function(id){if(selIds.indexOf(id)<0)selIds.push(id);});}else{selIds=selIds.filter(function(id){return ids.indexOf(id)<0;});}render();};
 window.clearSel=function(){selIds=[];render();};
-window.bulkDel=function(){if(!selIds.length)return;var n=selIds.length;if(!confirm('Mover '+n+' tarefa(s) para a lixeira?'))return;selIds.forEach(function(id){var t=tasks.find(function(x){return x.id===id;});if(t){t.deletedAt=new Date().toISOString();trash.push(t);}});tasks=tasks.filter(function(t){return selIds.indexOf(t.id)<0;});selIds=[];saveTasks();saveTrash();toast(n+' excluídas','🗑');render();};
+window.bulkDel=function(){
+  if(!selIds.length)return;
+  var n=selIds.length;
+  if(!confirm('Mover '+n+' tarefa(s) para a lixeira?'))return;
+  var moved=[];
+  selIds.forEach(function(id){var t=tasks.find(function(x){return x.id===id;});if(t){t.deletedAt=new Date().toISOString();trash.push(t);moved.push(t);}});
+  tasks=tasks.filter(function(t){return selIds.indexOf(t.id)<0;});
+  selIds=[];
+  saveTasks();saveTrash();
+  if(_supa){moved.forEach(function(t){sbDelete('tasks',t.id);sbUpsert('trash',t);});}
+  toast(n+' excluídas','🗑');render();
+};
 window.bulkComplete=function(){if(!selIds.length)return;selIds.forEach(function(id){var t=tasks.find(function(x){return x.id===id;});if(t){t.status='Concluído';t.pct=100;addHist(t,'Concluída em massa ✅');}});var n=selIds.length;saveTasks();toast(n+' concluídas','✅');selIds=[];render();};
 window.bulkReset=function(){if(!selIds.length)return;selIds.forEach(function(id){var t=tasks.find(function(x){return x.id===id;});if(t){var old=t.status;t.status='Inicial';t.pct=0;addHist(t,'Retornada ao Inicial (era: '+old+')');}});var n=selIds.length;saveTasks();toast(n+' retornadas','↩');selIds=[];render();};
 function renderSelBar(){var bar=ge('selbar');if(selIds.length){bar.className='on';ge('selcount').textContent=selIds.length;}else{bar.className='';}}
@@ -1714,9 +1725,9 @@ function renderTrash(vc){
     (trash.length?trash.map(function(t){var d2=t.deletedAt?new Date(t.deletedAt).toLocaleDateString('pt-BR'):'';return '<div class="titem"><span>🗑</span><div><div class="tinm">#'+t.id+' '+recurBadge(t)+' '+esc(t.name)+'</div><div class="timt">'+esc(t.project)+' · '+esc(t.responsible)+(d2?' · '+d2:'')+'</div></div>'+sbadge(t.status)+pbadge(t.priority)+'<button class="btn bgn bsm" onclick="restoreTask('+t.id+')">↩ Restaurar</button><button class="btn brd bsm" onclick="permDel('+t.id+')">✕ Apagar</button></div>';}).join(''):
     '<div class="empty"><div class="ei">🗑</div><p>Lixeira vazia</p></div>');
 }
-window.restoreTask=function(id){var t=trash.find(function(x){return x.id===id;});if(!t)return;trash=trash.filter(function(x){return x.id!==id;});delete t.deletedAt;tasks.push(t);saveTasks();saveTrash();toast('"'+t.name+'" restaurada','↩');render();};
+window.restoreTask=function(id){var t=trash.find(function(x){return x.id===id;});if(!t)return;trash=trash.filter(function(x){return x.id!==id;});delete t.deletedAt;tasks.push(t);saveTasks();saveTrash();if(_supa){sbDelete('trash',id);sbUpsert('tasks',t);}toast('"'+t.name+'" restaurada','↩');render();};
 window.permDel=function(id){if(!confirm('Excluir permanentemente?'))return;trash=trash.filter(function(x){return x.id!==id;});saveTrash();if(_supa)sbDelete('trash',id);render();toast('Excluído','✕');};
-window.emptyTrash=function(){if(!trash.length)return;if(!confirm('Esvaziar lixeira? '+trash.length+' tarefa(s) perdidas.'))return;trash=[];saveTrash();render();toast('Lixeira esvaziada','🗑');};
+window.emptyTrash=function(){if(!trash.length)return;if(!confirm('Esvaziar lixeira? '+trash.length+' tarefa(s) perdidas para sempre.'))return;if(_supa){trash.forEach(function(t){sbDelete('trash',t.id);});}trash=[];saveTrash();render();toast('Lixeira esvaziada','🗑');};
 
 // ═══ TOGGLE ═════════════════════════
 window.tg=function(h){h.classList.toggle('col');var b=h.nextElementSibling;while(b&&b.tagName==='DIV'&&!b.classList.contains('gb'))b=b.nextElementSibling;if(b)b.style.display=h.classList.contains('col')?'none':'';};
@@ -1847,10 +1858,16 @@ function spawnRecurTask(t){
 window.delTask=function(id){
   if(!confirm('Mover para a lixeira?'))return;
   var t=tasks.find(function(x){return x.id===id;});
-  if(t){t.deletedAt=new Date().toISOString();trash.push(t);saveTrash();}
+  if(t){
+    t.deletedAt=new Date().toISOString();
+    trash.push(t);
+    saveTrash();
+    // Sync: remove from tasks table, add to trash table
+    if(_supa){sbDelete('tasks',id);sbUpsert('trash',t);}
+  }
   tasks=tasks.filter(function(x){return x.id!==id;});
   selIds=selIds.filter(function(x){return x!==id;});
-  saveTasks();if(_supa)sbDelete('tasks',id);closeMo('det-ov');render();toast('Movida para lixeira','🗑');
+  saveTasks();closeMo('det-ov');render();toast('Movida para lixeira','🗑');
 };
 
 // ═══ DETAIL ═════════════════════════
