@@ -137,6 +137,23 @@ body{font-family:'DM Sans',sans-serif;font-size:15px;background:var(--bg);color:
 
 /* table */
 .tw{background:var(--s1);border:1px solid var(--bd);border-radius:12px;overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 200px)}
+table.resizable{table-layout:fixed;width:100%}
+th[data-col]{position:relative;white-space:nowrap;overflow:hidden;user-select:none}
+td.rc{overflow:hidden;max-width:1px}
+.rc .tn,.rc .tobs{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+/* Default column widths */
+th[data-col="id"]{width:var(--col-id,54px);min-width:40px}
+th[data-col="nm"]{width:var(--col-nm,220px);min-width:80px}
+th[data-col="st"]{width:var(--col-st,110px);min-width:60px}
+th[data-col="pr"]{width:var(--col-pr,90px);min-width:60px}
+th[data-col="re"]{width:var(--col-re,120px);min-width:60px}
+th[data-col="pj"]{width:var(--col-pj,120px);min-width:60px}
+th[data-col="dl"]{width:var(--col-dl,90px);min-width:60px}
+th[data-col="pc"]{width:var(--col-pc,80px);min-width:50px}
+th[data-col="ar"]{width:var(--col-ar,100px);min-width:60px}
+.col-resize{position:absolute;right:-1px;top:0;bottom:0;width:8px;cursor:col-resize;z-index:3}
+.col-resize::after{content:'';position:absolute;right:3px;top:20%;bottom:20%;width:2px;background:rgba(255,255,255,.2);border-radius:2px;transition:background .15s}
+.col-resize:hover::after,.col-resize.dragging::after{background:var(--ac);box-shadow:0 0 6px var(--ac)}
 table{width:100%;border-collapse:collapse;font-size:14px;min-width:680px}
 thead{background:var(--s2)}thead th{position:sticky;top:0;z-index:2;background:var(--s2);}
 th{padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;white-space:nowrap;cursor:pointer;user-select:none}
@@ -146,7 +163,7 @@ tbody tr:hover{background:rgba(255,255,255,.022)}
 .tr-late{background:rgba(255,77,106,.04)!important}
 .tr-sel{background:rgba(79,142,247,.07)!important}
 td{padding:8px 10px;color:var(--t2);vertical-align:middle}
-.tn{color:var(--t1);font-weight:600;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tn{color:var(--t1);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
 .tobs{font-size:9.5px;color:var(--t3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
 .tid{font-family:'DM Mono',monospace;font-size:10px;color:var(--t3)}
 .dh{cursor:grab;color:var(--t3);font-size:13px;padding:0 2px;user-select:none}.dh:active{cursor:grabbing}
@@ -237,9 +254,10 @@ input[type=checkbox]{accent-color:var(--ac);width:13px;height:13px;cursor:pointe
 /* calendar */
 .caln{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .caln h2{font-size:19px;font-weight:700;flex:1;text-align:center}
-.calg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.calg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;max-height:480px;overflow-y:auto;overflow-x:hidden}
 .cdow{text-align:center;padding:5px 3px;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.7px}
-.cday{background:var(--s1);border:1px solid var(--bd);border-radius:5px;min-height:76px;padding:4px}
+.cday{background:var(--s1);border:1px solid var(--bd);border-radius:5px;min-height:76px;padding:4px;cursor:pointer;transition:background .1s}
+.cday:hover:not(.om){background:var(--s2)}
 .cday.om{opacity:.2}.cday.tod{border-color:var(--ac)}
 .dn{font-size:12px;font-weight:600;color:var(--t3);margin-bottom:2px;font-family:'DM Mono',monospace}
 .cday.tod .dn{color:var(--ac)}
@@ -638,7 +656,8 @@ var _syncing=false;
 var _syncQueue=[];
 
 // ═══ LOCAL STORAGE (cache offline) ══
-var KT='tf9t',KP='tf9p',KR='tf9r';
+var KT='tf9t',KP='tf9p',KR='tf9r',KDP='tf9dp';
+var deletedProjects=lsGet(KDP)||[];
 function lsGet(k){try{return JSON.parse(localStorage.getItem(k))||[];}catch(e){return[];}}
 function lsSave(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 
@@ -657,19 +676,19 @@ async function sbFetch(table){
 }
 async function sbUpsert(table,row){
   if(!_supa)return;
-  try{await _supa.from(table).upsert(row,{onConflict:'id'});}catch(e){}
+  try{_supa.from(table).upsert(row,{onConflict:'id'}).then(function(){}).catch(function(e){console.warn('sbUpsert error',e);});}catch(e){}
 }
 async function sbDelete(table,id){
   if(!_supa)return;
   try{_supa.from(table).delete().eq('id',id).then(function(){}).catch(function(e){console.warn('sbDelete error',e);});}catch(e){}
 }
-async function sbUpsertProject(row){
+function sbUpsertProject(row){
   if(!_supa)return;
-  try{await _supa.from('projects').upsert(row,{onConflict:'name'});}catch(e){}
+  try{_supa.from('projects').upsert(row,{onConflict:'name'}).then(function(){}).catch(function(e){console.warn('sbUpsertProject error',e);});}catch(e){}
 }
-async function sbDeleteProject(name){
+function sbDeleteProject(name){
   if(!_supa)return;
-  try{await _supa.from('projects').delete().eq('name',name);}catch(e){}
+  try{_supa.from('projects').delete().eq('name',name).then(function(){}).catch(function(e){console.warn('sbDeleteProject error',e);});}catch(e){}
 }
 
 // Load from Supabase on startup (async)
@@ -701,7 +720,6 @@ async function loadFromSupabase(){
   setTimeout(function(){if(indicator)indicator.textContent='';},2000);
   window.render();
 }
-
 function saveTasks(){
   lsSave(KT,tasks);
   // sync each task to supabase async
@@ -711,16 +729,67 @@ function saveTasks(){
     });
   }
 }
+
+// Rebuild projects array from tasks + preserved metadata
+// This is the ONLY source of truth for projects
+function rebuildProjects(){
+  // Get all unique project names currently in active tasks
+  var taskProjects={};
+  tasks.forEach(function(t){
+    if(t.project&&deletedProjects.indexOf(t.project)<0){
+      taskProjects[t.project]=true;
+    }
+  });
+  // Keep existing projects that are still referenced in tasks
+  // OR that were explicitly created by user (exist in projects array already)
+  var newProjects=[];
+  // First: keep all explicitly-managed projects that aren't deleted
+  projects.forEach(function(p){
+    var name=p.name||p;
+    if(name&&deletedProjects.indexOf(name)<0){
+      newProjects.push(typeof p==='string'?{name:p,start:'',end:'',resp:'',desc:''}:p);
+      delete taskProjects[name]; // already handled
+    }
+  });
+  // Second: add any task project names not yet in projects
+  Object.keys(taskProjects).forEach(function(name){
+    newProjects.push({name:name,start:'',end:'',resp:'',desc:''});
+  });
+  projects=newProjects;
+  lsSave(KP,projects);
+}
 function saveProjects(){
   lsSave(KP,projects);
   if(_supa){
-    // Delete all then re-insert (projects are small)
-    projects.forEach(function(p){
-      sbUpsertProject({name:p.name,data:JSON.stringify(p)});
+    // Delete ALL from Supabase first, then reinsert only current projects
+    // This ensures deleted projects never come back on page reload
+    _supa.from('projects').delete().neq('name','__never__').then(function(){
+      projects.forEach(function(p){
+        sbUpsertProject({name:p.name,data:JSON.stringify(p)});
+      });
+    }).catch(function(){
+      projects.forEach(function(p){
+        sbUpsertProject({name:p.name,data:JSON.stringify(p)});
+      });
     });
   }
 }
 function saveAreas(){lsSave(KA,areas);}
+
+// Auto-register projects from tasks that aren't in the projects array yet
+function mergeTaskProjects(){
+  var changed=false;
+  tasks.forEach(function(t){
+    if(!t.project)return;
+    var exists=projects.some(function(p){return p.name===t.project;});
+    if(!exists){
+      projects.push({name:t.project,start:'',end:'',resp:'',desc:''});
+      changed=true;
+    }
+  });
+  if(changed)saveProjects();
+}
+
 function saveTrash(){
   lsSave(KR,trash);
   if(_supa){
@@ -735,6 +804,7 @@ var curView='dash',sortK=null,sortAsc=true;
 var calMonth=new Date(),expFmt='csv',pdfList=[];
 var selIds=[],dashFilter=null;
 var kbMode='board',urgMode='list',priMode='board',prioMode='board',respMode='board',listMode='list',urgShowDone=false,listHideDone=false,pjHistOpen={},quickFilter='',pjShowDone={},pjShowMore={},pjCollapsed={};
+var selPjs=[],selArs=[];
 window.showMoreProj=function(pj,cur){pjShowMore[pj]=(cur||0)+10;renderProj();};
 window.togglePjCollapse=function(el){var pj=el.dataset?el.dataset.pj:el;pjCollapsed[pj]=!pjCollapsed[pj];renderProj();};
 var kbDragId=null,kbDragSt=null,rowDragId=null;
@@ -772,7 +842,7 @@ function pgbar(pct,h){h=h||5;var c=pct>=100?'var(--gn)':pct>=60?'var(--ac)':pct>
 function getFiltered(){
   var q=gv('srch').toLowerCase();
   var st=gv('f-st'),pr=gv('f-pr'),re=gv('f-re'),pj=gv('f-pj'),ar=gv('f-ar'),d1=gv('f-d1'),d2=gv('f-d2');
-  return tasks.filter(function(t){
+  return tasks.slice().sort(function(a,b){return (a.order||0)-(b.order||0);}).filter(function(t){
     if(q&&((t.name||'')+(t.responsible||'')+(t.project||'')+(t.obs||'')).toLowerCase().indexOf(q)<0)return false;
     if(st&&t.status!==st)return false;
     if(pr&&t.priority!==pr)return false;
@@ -834,17 +904,19 @@ function renderSelBar(){var bar=ge('selbar');if(selIds.length){bar.className='on
 function addHist(t,msg){if(!t.hist)t.hist=[];t.hist.unshift({msg:msg,at:new Date().toISOString()});if(t.hist.length>20)t.hist.length=20;}
 
 // ═══ ROW DRAG ═══════════════════════
-window.rowDragStart=function(e,id){rowDragId=id;var r=ge('tr-'+id)||ge('uq-'+id);if(r)r.classList.add('dragging');e.dataTransfer.effectAllowed='move';};
-window.rowDragOver=function(e,id){e.preventDefault();document.querySelectorAll('.drag-over').forEach(function(r){r.classList.remove('drag-over');});if(id!==rowDragId){var r=ge('tr-'+id)||ge('uq-'+id);if(r)r.classList.add('drag-over');}};
-window.rowDrop=function(e,id){
-  e.preventDefault();if(!rowDragId||rowDragId===id)return;
-  var sorted=tasks.slice().sort(function(a,b){return(a.order||0)-(b.order||0);});
-  var si=-1,ti=-1;sorted.forEach(function(t,i){if(t.id===rowDragId)si=i;if(t.id===id)ti=i;});
-  if(si<0||ti<0)return;
-  var moved=sorted.splice(si,1)[0];sorted.splice(ti,0,moved);
-  sorted.forEach(function(t,i){t.order=i;});saveTasks();render();
+window.moveRow=function(id,dir){
+  // First normalize all orders so they are 0,1,2,3...
+  var list=getFiltered();
+  list.forEach(function(t,i){t.order=i;});
+  // Now find and swap
+  var idx=list.findIndex(function(t){return t.id===id;});
+  if(idx<0)return;
+  var swapIdx=idx+dir;
+  if(swapIdx<0||swapIdx>=list.length)return;
+  list[idx].order=swapIdx;
+  list[swapIdx].order=idx;
+  saveTasks();render();
 };
-window.rowDragEnd=function(){rowDragId=null;document.querySelectorAll('.dragging,.drag-over').forEach(function(r){r.classList.remove('dragging','drag-over');});};
 
 // ═══ KANBAN DRAG (change status) ════
 window.kbDragStart=function(e,id,st){kbDragId=id;kbDragSt=st;e.dataTransfer.effectAllowed='move';var el=document.getElementById('kbc-'+id);if(el)el.classList.add('dragging');};
@@ -1044,38 +1116,45 @@ function renderList(vc){
         '</div>';
       }).join('');
       return '<div class="ukc"><div class="ukch">'+pjEmoji(pj)+' '+esc(pj)+'<span style="font-size:9px;color:var(--t3);margin-left:6px">'+col.length+' tarefa'+(col.length!==1?'s':'')+'</span></div>'+
-        '<div style="max-height:480px;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px">'+cards+'</div></div>';
+        '<div style="padding:8px;display:flex;flex-direction:column;gap:6px">'+cards+'</div></div>';
     }).join('');
-    ge('v-lista').innerHTML=ctrlBar+'<div class="ukb">'+cols+'</div>';
+    ge('v-lista').innerHTML=ctrlBar+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">'+cols+'</div>';
     return;
   }
   var rows=list.map(function(t,pos){
     var done=t.status==='Concluído',isSel=selIds.indexOf(t.id)>=0;
-    return '<tr id="tr-'+t.id+'" class="'+(done?'tr-done':'')+(isSel?' tr-sel':'')+'"'+
-      ' draggable="true" ondragstart="rowDragStart(event,'+t.id+')" ondragover="rowDragOver(event,'+t.id+')" ondrop="rowDrop(event,'+t.id+')" ondragend="rowDragEnd()">'+
+    return '<tr id="tr-'+t.id+'" class="'+(done?'tr-done':'')+(isSel?' tr-sel':'')+'" ondragover="rowDragOver(event,'+t.id+')" ondrop="rowDrop(event,'+t.id+')">'+
       '<td style="padding:5px 4px;text-align:center" onclick="event.stopPropagation()"><div class="chk'+(done?' done':'')+'" onclick="completeTask('+t.id+')" title="'+(done?'Reabrir':'Concluir')+'">'+(done?'✓':'')+'</div></td>'+
       '<td onclick="event.stopPropagation()" style="padding:5px 4px;text-align:center"><input type="checkbox"'+(isSel?' checked':'')+' onchange="toggleSel('+t.id+',this.checked)" style="accent-color:var(--ac);cursor:pointer"></td>'+
       '<td class="tid">#'+t.id+'</td>'+
       '<td style="font-size:9.5px;color:var(--t3);text-align:center;padding:8px 4px">'+(pos+1)+'</td>'+
-      '<td style="padding:6px 6px;text-align:center;cursor:grab" title="Arrastar"><span class="dh">≡</span></td>'+
-      '<td onclick="openDet('+t.id+')"><div class="tn">'+recurBadge(t)+' '+esc(t.name)+'</div>'+(t.obs?'<div class="tobs">'+esc(t.obs)+'</div>':'')+
+      '<td style="padding:6px 6px;text-align:center;cursor:grab;user-select:none" title="Arrastar para reordenar" draggable="true" ondragstart="rowDragStart(event,'+t.id+')" ondragend="rowDragEnd()"><span class="dh">≡</span></td>'+
+      '<td class="rc" onclick="openDet('+t.id+')" title="'+esc(t.name)+'"><div class="tn">'+recurBadge(t)+' '+esc(t.name)+'</div>'+(t.obs?'<div class="tobs">'+esc(t.obs)+'</div>':'')+
       '</td>'+
       '<td>'+sbadge(t.status)+'</td>'+
       '<td>'+pbadge(t.priority)+'</td>'+
       '<td style="font-weight:600;white-space:nowrap">'+esc(t.responsible)+'</td>'+
       '<td style="color:var(--ac2)">'+esc(t.project)+'</td>'+
       '<td>'+dlPill(t)+'</td><td>'+pgbar(t.pct)+'</td>'+
-      '<td><div class="ab"><button class="ib e" onclick="event.stopPropagation();openEdit('+t.id+')">✏️</button><button class="ib d" onclick="event.stopPropagation();delTask('+t.id+')">🗑</button></div></td></tr>';
+      '<td><div class="ab"><button class="ib e" onclick="event.stopPropagation();openEdit('+t.id+')">✏️</button><button class="ib d" onclick="event.stopPropagation();delTask('+t.id+')">🗑</button><button class="ib" onclick="event.stopPropagation();moveRow('+t.id+',-1)" style="font-size:10px;padding:1px 4px" title="Mover cima">▲</button><button class="ib" onclick="event.stopPropagation();moveRow('+t.id+',1)" style="font-size:10px;padding:1px 4px" title="Mover baixo">▼</button></div></td></tr>';
   }).join('');
-  ge('v-lista').innerHTML=ctrlBar+'<div class="tw"><table><thead><tr>'+
+  ge('v-lista').innerHTML=ctrlBar+'<div class="tw"><table class="resizable" id="lista-table"><colgroup>'+
+    '<col style="width:28px"><col style="width:26px">'+  // checkboxes
+    '<col id="col-id"><col style="width:26px"><col style="width:22px">'+  // id, pos, drag
+    '<col id="col-nm"><col id="col-st"><col id="col-pr"><col id="col-re"><col id="col-pj"><col id="col-dl"><col id="col-pc"><col style="width:60px">'+
+    '</colgroup><thead><tr>'+
     '<th class="noc" style="width:28px;text-align:center;color:var(--gn)" title="Concluir/Reabrir">✓</th>'+
     '<th class="noc" style="width:26px"><input type="checkbox"'+(allSel?' checked':'')+' onchange="toggleAll(this.checked,'+JSON.stringify(ids)+')" style="cursor:pointer;accent-color:var(--ac)"></th>'+
-    '<th onclick="sortBy(\'id\')">#ID</th><th class="noc" style="width:26px;text-align:center">Pos</th>'+
+    '<th data-col="id" onclick="sortBy(\'id\')">#ID<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th class="noc" style="width:26px;text-align:center">Pos</th>'+
     '<th class="noc" style="width:22px">≡</th>'+
-    '<th onclick="sortBy(\'name\')">Tarefa</th><th onclick="sortBy(\'status\')">Status</th>'+
-    '<th onclick="sortBy(\'priority\')">Prioridade</th><th onclick="sortBy(\'responsible\')">Responsável</th>'+
-    '<th onclick="sortBy(\'project\')">Projeto</th><th onclick="sortBy(\'deadline\')">Prazo</th>'+
-    '<th>Progresso</th><th></th>'+
+    '<th data-col="nm" onclick="sortBy(\'name\')">Tarefa<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th data-col="st" onclick="sortBy(\'status\')">Status<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th data-col="pr" onclick="sortBy(\'priority\')">Prioridade<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th data-col="re" onclick="sortBy(\'responsible\')">Responsável<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th data-col="pj" onclick="sortBy(\'project\')">Projeto<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th data-col="dl" onclick="sortBy(\'deadline\')">Prazo<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th data-col="pc">Progresso<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th class="noc" style="width:60px"></th>'+
     '</tr></thead><tbody>'+(rows||'<tr><td colspan="13"><div class="empty"><div class="ei">🔍</div><p>Nenhuma tarefa encontrada</p></div></td></tr>')+
     '</tbody></table></div>';
 }
@@ -1143,10 +1222,13 @@ function renderKanban(){
   }else{
     var groups=COLS.map(function(s){
       var col=list.filter(function(t){return t.status===s;});if(!col.length)return '';
-      var trows=col.map(function(t){var dk=t.status==='Concluído',sk=selIds.indexOf(t.id)>=0;return '<tr id="tr-'+t.id+'" class="'+(dk?'tr-done':'')+(sk?' tr-sel':'')+'" draggable="true" ondragstart="rowDragStart(event,'+t.id+')" ondragover="rowDragOver(event,'+t.id+')" ondrop="rowDrop(event,'+t.id+')" ondragend="rowDragEnd()"><td style="padding:5px 4px;text-align:center"><div class="chk'+(dk?' done':'')+'" onclick="event.stopPropagation();completeTask('+t.id+')">'+(dk?'✓':'')+'</div></td><td onclick="event.stopPropagation()" style="padding:5px 4px;text-align:center"><input type="checkbox"'+(sk?' checked':'')+' onchange="toggleSel('+t.id+',this.checked)" style="accent-color:var(--ac);cursor:pointer"></td><td class="tid">#'+t.id+'</td><td onclick="openDet('+t.id+')"><div class="tn">'+recurBadge(t)+' '+esc(t.name)+'</div></td><td>'+pbadge(t.priority)+'</td><td style="color:var(--t1)">'+esc(t.responsible)+'</td><td style="color:var(--ac2)">'+esc(t.project)+'</td>'+dlPill(t)+'<td>'+pgbar(t.pct)+'</td><td><div class="ab"><button class="ib e" onclick="event.stopPropagation();openEdit('+t.id+')">✏️</button><button class="ib d" onclick="event.stopPropagation();delTask('+t.id+')">🗑</button></div></td></tr>';}).join('');
+      var trows=col.map(function(t){var dk=t.status==='Concluído',sk=selIds.indexOf(t.id)>=0;return '<tr id="tr-'+t.id+'" class="'+(dk?'tr-done':'')+(sk?' tr-sel':'')+'" draggable="true" ondragstart="rowDragStart(event,'+t.id+')" ondragover="rowDragOver(event,'+t.id+')" ondrop="rowDrop(event,'+t.id+')" ondragend="rowDragEnd()"><td style="padding:5px 4px;text-align:center"><div class="chk'+(dk?' done':'')+'" onclick="event.stopPropagation();completeTask('+t.id+')">'+(dk?'✓':'')+'</div></td><td onclick="event.stopPropagation()" style="padding:5px 4px;text-align:center"><input type="checkbox"'+(sk?' checked':'')+' onchange="toggleSel('+t.id+',this.checked)" style="accent-color:var(--ac);cursor:pointer"></td><td class="tid">#'+t.id+'</td><td class="rc" onclick="openDet('+t.id+')" title="'+esc(t.name)+'"><div class="tn">'+recurBadge(t)+' '+esc(t.name)+'</div></td><td>'+pbadge(t.priority)+'</td><td style="color:var(--t1)">'+esc(t.responsible)+'</td><td style="color:var(--ac2)">'+esc(t.project)+'</td>'+dlPill(t)+'<td>'+pgbar(t.pct)+'</td><td><div class="ab"><button class="ib e" onclick="event.stopPropagation();openEdit('+t.id+')">✏️</button><button class="ib d" onclick="event.stopPropagation();delTask('+t.id+')">🗑</button><button class="ib" onclick="event.stopPropagation();moveRow('+t.id+',-1)" style="font-size:10px;padding:1px 4px" title="Mover cima">▲</button><button class="ib" onclick="event.stopPropagation();moveRow('+t.id+',1)" style="font-size:10px;padding:1px 4px" title="Mover baixo">▼</button></div></td></tr>';}).join('');
       return '<div class="kb-list-group">'+
         '<div class="kb-list-hd"><div class="kd" style="background:'+sc(s)+'"></div><div class="kt">'+esc(s)+'</div><div class="kn">'+col.length+'</div></div>'+
-        '<div class="tw" style="border-radius:0 0 9px 9px"><table><thead><tr><th class="noc" style="width:28px;text-align:center;color:var(--gn)">✓</th><th class="noc" style="width:26px"></th><th>#</th><th>Tarefa</th><th>Prioridade</th><th>Responsável</th><th>Projeto</th><th>Prazo</th><th>Progresso</th><th></th></tr></thead><tbody>'+trows+'</tbody></table></div></div>';
+        '<div class="tw" style="border-radius:0 0 9px 9px"><table class="resizable"><colgroup>'+
+        '<col style="width:28px"><col style="width:26px">'+
+        '<col><col id="col-nm"><col id="col-pr"><col id="col-re"><col id="col-pj"><col id="col-dl"><col id="col-pc"><col style="width:60px">'+
+        '</colgroup><thead><tr><th class="noc" style="width:28px;text-align:center;color:var(--gn)">✓</th><th class="noc" style="width:26px"></th><th data-col="id">#<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="nm">Tarefa<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="pr">Prioridade<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="re">Responsável<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="pj">Projeto<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="dl">Prazo<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="pc">Progresso<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th class="noc" style="width:60px"></th></tr></thead><tbody>'+trows+'</tbody></table></div></div>';
     }).filter(Boolean).join('');
     ge('v-kanban').innerHTML=topBar+(groups||'<div class="empty"><div class="ei">📋</div><p>Nenhuma tarefa</p></div>');
   }
@@ -1166,15 +1248,92 @@ function renderCal(){
   for(var i=0;i<tot;i++){
     var day,om=false;
     if(i<fd){day=dp-fd+i+1;om=true;}else if(i>=fd+dim){day=i-fd-dim+1;om=true;}else day=i-fd+1;
-    var ds=!om?(y+'-'+pad(m+1)+'-'+pad(day)):null;var tod=ds===tstr;
-    var dts=ds?calTasks.filter(function(t){return t.deadline===ds;}):[];
-    h+='<div class="cday'+(om?' om':'')+(tod?' tod':'')+'"><div class="dn">'+day+'</div>'+
-      dts.slice(0,3).map(function(t){return '<div class="ctd" style="background:'+pc(t.priority)+'18;color:'+pc(t.priority)+'" onclick="openDet('+t.id+')" title="'+esc(t.name)+'">'+recurBadge(t)+' '+esc(t.name)+'</div>';}).join('')+
-      (dts.length>3?'<div style="font-size:8px;color:var(--t3);text-align:center">+'+(dts.length-3)+'</div>':'')+
+    var ds=!om?(y+'-'+pad(m+1)+'-'+pad(day)):null;
+    var tod=ds===tstr;
+    // Show tasks that START on this day OR tasks that are active (start <= day <= deadline)
+    var dts=ds?calTasks.filter(function(t){
+      var ts=t.start||t.deadline;
+      var td=t.deadline||t.start;
+      return ts===ds||(ts&&td&&ts<=ds&&td>=ds&&ts!==td);
+    }):[];
+    // Mark start vs active vs end
+    var dayHtml=dts.slice(0,3).map(function(t){
+      var isStart=t.start===ds;
+      var isEnd=t.deadline===ds;
+      var dot=isStart?'●':isEnd?'◆':'─';
+      return '<div class="ctd" style="background:'+pc(t.priority)+(isStart?'30':isEnd?'22':'14')+';color:'+pc(t.priority)+';cursor:pointer" onclick="event.stopPropagation();openDet('+t.id+')" title="'+esc(t.name)+'">'+
+        '<span style="font-size:7px;margin-right:2px">'+dot+'</span>'+recurBadge(t)+esc(t.name.slice(0,18))+(t.name.length>18?'…':'')+
       '</div>';
+    }).join('');
+    var moreHtml=dts.length>3?'<div style="font-size:8px;color:var(--t3);text-align:center;cursor:pointer" onclick="event.stopPropagation();openCalDay(\''+ds+'\')">+'+(dts.length-3)+' ver tudo</div>':'';
+    // Click on day = open day detail panel
+    h+='<div class="cday'+(om?' om':'')+(tod?' tod':'')+'" onclick="openCalDay(\''+( ds||'')+'\')">'+
+      '<div class="dn" style="pointer-events:none">'+day+'</div>'+
+      dayHtml+moreHtml+
+    '</div>';
   }
-  ge('v-cal').innerHTML='<div class="caln"><button class="btn bg2 bsm" onclick="calPrev()">← Ant.</button><h2>'+MN[m]+' '+y+'</h2><button class="btn bg2 bsm" onclick="calNext()">Próx. →</button></div><div class="calg">'+h+'</div>';
+  ge('v-cal').innerHTML=
+    '<div class="caln">'+
+      '<button class="btn bg2 bsm" onclick="calPrev()">← Ant.</button>'+
+      '<h2>'+MN[m]+' '+y+'</h2>'+
+      '<button class="btn bg2 bsm" onclick="calNext()">Próx. →</button>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;font-size:9px;color:var(--t3);margin-bottom:8px;padding:0 2px">'+
+      '<span><span style="color:var(--ac)">●</span> Início</span>'+
+      '<span><span style="color:var(--ac)">─</span> Em andamento</span>'+
+      '<span><span style="color:var(--ac)">◆</span> Prazo</span>'+
+    '</div>'+
+    '<div class="calg">'+h+'</div>';
+  // Panel lives outside calg to avoid grid/click issues
+  var existingPanel=ge('cal-day-panel');
+  var panelHTML='<div id="cal-day-panel" style="display:none;margin-top:12px;background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:16px"></div>';
+  // Always append panel after calg (innerHTML reset removes it each time)
+  ge('v-cal').insertAdjacentHTML('beforeend',panelHTML);
 }
+
+window.closeCalDay=function(){var p=ge('cal-day-panel');if(p)p.style.display='none';};
+window.openCalDay=function(ds){
+  if(!ds)return;
+  var panel=ge('cal-day-panel');if(!panel)return;
+  var calTasks=getFiltered();
+  var dts=calTasks.filter(function(t){
+    var ts=t.start||t.deadline,td=t.deadline||t.start;
+    return t.start===ds||t.deadline===ds||(ts&&td&&ts<=ds&&td>=ds);
+  });
+  if(!dts.length){panel.style.display='none';return;}
+  // Format date nicely
+  var parts=ds.split('-');
+  var dn=new Date(ds+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
+  panel.style.display='block';
+  panel.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
+      '<div style="font-size:14px;font-weight:700;color:var(--t1)">📅 '+dn+'</div>'+
+      '<button class="btn bg2 bsm" onclick="closeCalDay()">✕</button>'+
+    '</div>'+
+    '<div style="display:flex;flex-direction:column;gap:6px;max-height:360px;overflow-y:auto">'+
+    dts.map(function(t){
+      var isStart=t.start===ds,isEnd=t.deadline===ds;
+      var tag=isStart?'<span style="font-size:9px;background:var(--ac)22;color:var(--ac);border-radius:4px;padding:1px 5px;font-weight:600">início</span>':
+               isEnd?'<span style="font-size:9px;background:'+pc(t.priority)+'22;color:'+pc(t.priority)+';border-radius:4px;padding:1px 5px;font-weight:600">prazo</span>':
+               '<span style="font-size:9px;background:var(--s2);color:var(--t3);border-radius:4px;padding:1px 5px">em andamento</span>';
+      var late=isLate(t)?'<span style="font-size:9px;background:#ef444420;color:#ef4444;border-radius:4px;padding:1px 5px;margin-left:4px">atrasada</span>':'';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;cursor:pointer" onclick="openDet('+t.id+')">'+
+        '<div style="width:3px;align-self:stretch;border-radius:2px;background:'+pc(t.priority)+';flex-shrink:0"></div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+recurBadge(t)+' '+esc(t.name)+'</div>'+
+          '<div style="display:flex;gap:4px;align-items:center;margin-top:3px;flex-wrap:wrap">'+
+            tag+late+sbadge(t.status)+
+            (t.responsible?'<span style="font-size:9px;color:var(--t3)">👤 '+esc(t.responsible)+'</span>':'')+
+            (t.project?'<span style="font-size:9px;color:var(--t3)">📁 '+esc(t.project)+'</span>':'')+
+          '</div>'+
+        '</div>'+
+        '<div style="flex-shrink:0">'+pbadge(t.priority)+'</div>'+
+      '</div>';
+    }).join('')+
+    '</div>';
+  // Scroll panel into view
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+};
 
 // ═══ PROJECTS ═══════════════════════
 function renderProj(){
@@ -1232,7 +1391,7 @@ function renderProj(){
         // ── CARDS (hidden when collapsed) ──
         (collapsed?'':
           '<div style="padding:10px 12px">'+
-            (cards?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;max-height:400px;overflow-y:auto">'+cards+'</div>':
+            (cards?'<div style="display:flex;flex-direction:column;gap:6px;max-height:500px;overflow-y:auto;padding:2px">'+cards+'</div>':
              '<div style="padding:10px;color:var(--t3);font-size:11px;text-align:center">Nenhuma tarefa ativa. <span style="color:var(--ac);cursor:pointer" onclick="openNew()">Criar →</span></div>')+
           '</div>'
         )+
@@ -1251,19 +1410,28 @@ function mkGroup(list,label,av,color){
       '<td style="padding:7px 8px" onclick="event.stopPropagation()"><input type="checkbox"'+(isSel?' checked':'')+' onchange="toggleSel('+t.id+',this.checked)"></td>'+
       '<td style="padding:7px 5px"><span class="dh">≡</span></td>'+
       '<td style="padding:7px 8px;font-family:\'DM Mono\',monospace;font-size:9.5px;color:var(--t3)">#'+t.id+'</td>'+
-      '<td style="padding:7px 8px;color:var(--t1);font-weight:600" onclick="openDet('+t.id+')">'+recurBadge(t)+' '+esc(t.name)+'</td>'+
+      '<td style="padding:7px 8px;color:var(--t1);font-weight:600" class="rc" onclick="openDet('+t.id+')" title="'+esc(t.name)+'">'+recurBadge(t)+' '+esc(t.name)+'</td>'+
       '<td style="padding:7px 8px">'+sbadge(t.status)+'</td><td style="padding:7px 8px">'+pbadge(t.priority)+'</td>'+
       '<td style="padding:7px 8px;color:var(--t2)">'+esc(t.project)+'</td>'+
       '<td style="padding:7px 8px;font-family:\'DM Mono\',monospace;font-size:10px">'+fmtDate(t.deadline)+'</td>'+
       '<td style="padding:7px 8px">'+(isLate(t)?'<span class="lc">+'+daysLate(t)+'d</span>':'<span style="color:var(--gn);font-size:10px">✓</span>')+'</td>'+
       '<td style="padding:7px 8px">'+pgbar(t.pct)+'</td>'+
-      '<td style="padding:7px 8px"><div class="ab"><button class="ib e" onclick="event.stopPropagation();openEdit('+t.id+')">✏️</button><button class="ib d" onclick="event.stopPropagation();delTask('+t.id+')">🗑</button></div></td>'+
+      '<td style="padding:7px 8px"><div class="ab"><button class="ib e" onclick="event.stopPropagation();openEdit('+t.id+')">✏️</button><button class="ib d" onclick="event.stopPropagation();delTask('+t.id+')">🗑</button><button class="ib" onclick="event.stopPropagation();moveRow('+t.id+',-1)" style="font-size:10px;padding:1px 4px" title="Mover cima">▲</button><button class="ib" onclick="event.stopPropagation();moveRow('+t.id+',1)" style="font-size:10px;padding:1px 4px" title="Mover baixo">▼</button></div></td>'+
       '</tr>';
   }).join('');
   var body=list.length?
-    '<div class="tw"><table><thead><tr>'+
+    '<div class="tw"><table class="resizable"><thead><tr>'+
     '<th class="noc" style="padding:7px 8px;width:26px"><input type="checkbox"'+(allSel?' checked':'')+' onchange="toggleAll(this.checked,'+JSON.stringify(ids)+')" style="accent-color:var(--ac);cursor:pointer"></th>'+
-    ['','#','Tarefa','Status','Prioridade','Projeto','Prazo','Atraso','Progresso',''].map(function(h2){return '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase">'+h2+'</th>';}).join('')+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative"></th>'+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative" data-col="id">#<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative" data-col="nm">Tarefa<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative" data-col="st">Status<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative" data-col="pr">Prioridade<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative" data-col="pj">Projeto<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative" data-col="dl">Prazo<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative">Atraso</th>'+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative" data-col="pc">Progresso<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th>'+
+    '<th style="padding:7px 8px;text-align:left;font-size:8.5px;color:var(--t3);text-transform:uppercase;position:relative"></th>'+
     '</tr></thead><tbody>'+rows+'</tbody></table></div>':
     '<div style="padding:11px 14px;color:var(--t3);font-size:11px">Nenhuma tarefa.</div>';
   var extra=(late?'<span style="font-size:9px;padding:2px 6px;background:rgba(255,77,106,.1);color:var(--rd);border-radius:99px">'+late+' atras.</span>':'')+
@@ -1642,23 +1810,57 @@ function renderLate(vc){
   var list=getFiltered().filter(isLate).sort(function(a,b){return daysLate(b)-daysLate(a);});
   if(vc)vc.textContent='('+list.length+')';
   if(!list.length){ge('v-late').innerHTML='<div class="empty"><div class="ei">🎉</div><p>Nenhuma tarefa atrasada!</p></div>';return;}
-  var rows=list.map(function(t){return '<tr onclick="openDet('+t.id+')"><td class="tid">#'+t.id+'</td><td><div class="tn">'+recurBadge(t)+' '+esc(t.name)+'</div></td><td>'+esc(t.responsible)+'</td><td style="color:var(--ac2)">'+esc(t.project)+'</td><td>'+pbadge(t.priority)+'</td><td class="dtc" style="color:var(--rd)">'+fmtDate(t.deadline)+'</td><td><span class="lc" style="font-size:12px">+'+daysLate(t)+'d</span></td><td>'+pgbar(t.pct)+'</td><td><div class="ab"><button class="ib e" onclick="event.stopPropagation();openEdit('+t.id+')">✏️</button><button class="ib d" onclick="event.stopPropagation();delTask('+t.id+')">🗑</button></div></td></tr>';}).join('');
-  ge('v-late').innerHTML='<div class="tw"><table><thead><tr>'+['#','Tarefa','Responsável','Projeto','Prioridade','Prazo','Dias Atraso','Progresso',''].map(function(h2){return '<th>'+h2+'</th>';}).join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var rows=list.map(function(t){return '<tr onclick="openDet('+t.id+')"><td class="tid">#'+t.id+'</td><td><div class="tn">'+recurBadge(t)+' '+esc(t.name)+'</div></td><td>'+esc(t.responsible)+'</td><td style="color:var(--ac2)">'+esc(t.project)+'</td><td>'+pbadge(t.priority)+'</td><td class="dtc" style="color:var(--rd)">'+fmtDate(t.deadline)+'</td><td><span class="lc" style="font-size:12px">+'+daysLate(t)+'d</span></td><td>'+pgbar(t.pct)+'</td><td><div class="ab"><button class="ib e" onclick="event.stopPropagation();openEdit('+t.id+')">✏️</button><button class="ib d" onclick="event.stopPropagation();delTask('+t.id+')">🗑</button><button class="ib" onclick="event.stopPropagation();moveRow('+t.id+',-1)" style="font-size:10px;padding:1px 4px" title="Mover cima">▲</button><button class="ib" onclick="event.stopPropagation();moveRow('+t.id+',1)" style="font-size:10px;padding:1px 4px" title="Mover baixo">▼</button></div></td></tr>';}).join('');
+  ge('v-late').innerHTML='<div class="tw"><table class="resizable"><thead><tr><th>#</th><th data-col="nm">Tarefa<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="re">Responsável<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="pj">Projeto<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="pr">Prioridade<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th data-col="dl">Prazo<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th>Dias Atraso</th><th data-col="pc">Progresso<span class="col-resize" onclick="event.stopPropagation()" ondragstart="event.stopPropagation();return false"></span></th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
 // ═══ PROJ MGR ═══════════════════════
+
+window.forceSyncProjects=function(){
+  // Re-scan all tasks and add any project names not in projects array
+  var added=0;
+  tasks.forEach(function(t){
+    if(!t.project)return;
+    if(deletedProjects.indexOf(t.project)>=0)return;
+    if(!projects.some(function(p){return(p.name||p)===t.project;})){
+      projects.push({name:t.project,start:'',end:'',resp:'',desc:''});
+      added++;
+    }
+  });
+  // Save to Supabase with clean slate (delete all + re-insert)
+  saveProjects();
+  toast('Projetos sincronizados! '+projects.length+' projeto(s) encontrado(s), '+added+' adicionado(s).','✅');
+  render();
+};
 function renderProjMgr(){
   var allP=uniq(projects.map(function(p){return p.name;}).concat(tasks.map(function(t){return t.project;}))).sort();
-  ge('v-projmgr').innerHTML='<button class="btn bp" onclick="openPjNew()" style="margin-bottom:12px">＋ Novo Projeto</button>'+
+  var allSel=allP.length>0&&selPjs.length===allP.length;
+  var selBar=selPjs.length?'<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);border-radius:8px;margin-bottom:10px">'+
+    '<span style="font-size:12px;color:var(--ac);font-weight:600">'+selPjs.length+' selecionado(s)</span>'+
+    '<button class="btn brd bsm" style="margin-left:auto" onclick="bulkDelPjs()">🗑 Excluir selecionados</button>'+
+    '<button class="btn bg2 bsm" onclick="selPjs=[];renderProjMgr()">✕ Limpar</button>'+
+  '</div>':'';
+  ge('v-projmgr').innerHTML=
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
+      '<input type="checkbox"'+(allSel?' checked':'')+' onchange="toggleAllPj(this.checked)" style="accent-color:var(--ac);width:14px;height:14px;cursor:pointer" title="Selecionar todos">'+
+      '<span style="font-size:11px;color:var(--t3)">Selecionar todos</span>'+
+      '<button class="btn bp bsm" style="margin-left:auto" onclick="openPjNew()">＋ Novo Projeto</button>'+
+      '<button class="btn bg2 bsm" onclick="forceSyncProjects()" title="Limpar projetos excluídos do servidor">🔄 Sincronizar</button>'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--t3);margin-bottom:8px">'+allP.length+' projeto(s) | '+tasks.length+' tarefa(s) total</div>'+
+    selBar+
     (allP.length?allP.map(function(pj){
       var meta=projects.find(function(p){return p.name===pj;})||{};
       var cnt=tasks.filter(function(t){return t.project===pj;}).length;
-      return '<div class="pli"><span style="font-size:15px">'+pjEmoji(pj)+'</span>'+
-        '<div style="flex:1"><div class="plnm">'+esc(pj)+'</div>'+
+      var isSel=selPjs.indexOf(pj)>=0;
+      return '<div class="pli" style="'+(isSel?'background:rgba(99,102,241,.08);border-color:rgba(99,102,241,.3)':'')+'">'+
+        '<input type="checkbox"'+(isSel?' checked':'')+' data-pj="'+esc(pj)+'" onchange="toggleSelPj(this.dataset.pj,this.checked)" style="accent-color:var(--ac);width:13px;height:13px;cursor:pointer;flex-shrink:0">'+
+        '<span style="font-size:15px;flex-shrink:0">'+pjEmoji(pj)+'</span>'+
+        '<div style="flex:1;min-width:0"><div class="plnm">'+esc(pj)+'</div>'+
         '<div style="font-size:10px;color:var(--t3)">'+(meta.desc?esc(meta.desc.slice(0,70)):'')+( meta.start?' · '+fmtDate(meta.start):'')+( meta.end?' → '+fmtDate(meta.end):'')+( meta.resp?' · '+esc(meta.resp):'' )+'</div></div>'+
         '<span class="plct">'+cnt+' tarefa'+(cnt!==1?'s':'')+'</span>'+
         '<button class="btn bg2 bxs" data-pj="'+esc(pj)+'" onclick="openPjEdit(this.dataset.pj)">✏️</button>'+
-        '<button class="btn brd bxs" data-pj="'+esc(pj)+'" onclick="delProject(this.dataset.pj)">🗑 Excluir</button></div>';
+        '<button class="btn brd bxs" data-pj="'+esc(pj)+'" onclick="delProject(this.dataset.pj)">🗑</button></div>';
     }).join(''):'<div class="empty"><div class="ei">📁</div><p>Nenhum projeto.</p></div>');
 }
 window.openPjNew=function(){ge('pj-ttl').textContent='Novo Projeto';['pj-old','pj-nm','pj-ds','pj-de','pj-re','pj-ob'].forEach(function(id){sv(id,'');});openMo('pj-ov');setTimeout(function(){var e=ge('pj-nm');if(e)e.focus();},80);};
@@ -1667,22 +1869,37 @@ window.savePj=function(){
   var name=gv('pj-nm').trim();if(!name){toast('Digite o nome!','⚠️');return;}
   var old=gv('pj-old');
   var obj={name:name,start:gv('pj-ds'),end:gv('pj-de'),resp:gv('pj-re'),desc:gv('pj-ob')};
-  if(old&&old!==name){tasks.forEach(function(t){if(t.project===old)t.project=name;});saveTasks();}
+  if(old&&old!==name){
+    tasks.forEach(function(t){if(t.project===old)t.project=name;});
+    saveTasks();
+    if(_supa)sbDeleteProject(old); // delete old name from Supabase on rename
+  }
   if(old)projects=projects.filter(function(p){return p.name!==old;});
   else if(projects.some(function(p){return p.name===name;})){toast('Projeto já existe','⚠️');return;}
-  projects.push(obj);saveProjects();closeMo('pj-ov');toast(old?'Projeto atualizado!':'Projeto criado!','📁');render();
+  projects.push(obj);
+  saveProjects(); // upserts new name to Supabase
+  closeMo('pj-ov');toast(old?'Projeto atualizado!':'Projeto criado!','📁');render();
 };
 window.delProject=function(name){
-  var cnt=tasks.filter(function(t){return t.project===name;}).length;
+  var affected=tasks.filter(function(t){return t.project===name;});
+  var cnt=affected.length;
   if(!confirm(cnt>0?'"'+name+'" tem '+cnt+' tarefa(s). Mover para lixeira?':'Excluir "'+name+'"?'))return;
-  tasks.filter(function(t){return t.project===name;}).forEach(function(t){t.deletedAt=new Date().toISOString();trash.push(t);});
+  var now=new Date().toISOString();
+  affected.forEach(function(t){
+    t.deletedAt=now;
+    trash.push(t);
+    if(_supa){sbDelete('tasks',t.id);sbUpsert('trash',t);}
+  });
   tasks=tasks.filter(function(t){return t.project!==name;});
   projects=projects.filter(function(p){return p.name!==name;});
-  saveTasks();saveProjects();saveTrash();toast('Projeto excluído','🗑');render();
+  if(_supa)sbDeleteProject(name);
+  saveTasks();saveProjects();saveTrash();
+  selPjs=selPjs.filter(function(x){return x!==name;});
+  toast('Projeto "'+name+'" excluído','🗑');render();
 };
 window.quickNewProject=function(){var m=ge('qpj-modal');if(m){m.style.display='flex';sv('qpj-inp','');setTimeout(function(){var i=ge('qpj-inp');if(i)i.focus();},60);}};
 window.closeQuickPj=function(){var m=ge('qpj-modal');if(m)m.style.display='none';};
-window.doQuickNewProject=function(){var name=(gv('qpj-inp')||'').trim();if(!name){toast('Digite o nome!','⚠️');return;}if(projects.some(function(p){return p.name===name;})){toast('Projeto já existe','⚠️');return;}projects.push({name:name,start:'',end:'',resp:'',desc:''});saveProjects();popSelects();sv('fpj',name);closeQuickPj();toast('Projeto "'+name+'" criado! ✅','📁');};
+window.doQuickNewProject=function(){var name=(gv('qpj-inp')||'').trim();if(!name){toast('Digite o nome!','⚠️');return;}if(projects.some(function(p){return p.name===name;})){toast('Projeto já existe','⚠️');return;}projects.push({name:name,start:'',end:'',resp:'',desc:''});deletedProjects=deletedProjects.filter(function(x){return x!==name;});try{localStorage.setItem(KDP,JSON.stringify(deletedProjects));}catch(e){}saveProjects();render();sv('fpj',name);closeQuickPj();toast('Projeto "'+name+'" criado! ✅','📁');};
 
 // ═══ AREA MGR ═══════════════════════════════
 window.quickNewArea=function(){
@@ -1694,7 +1911,7 @@ window.doQuickNewArea=function(){
   var name=(gv('qar-inp')||'').trim();
   if(!name){toast('Digite o nome!','⚠️');return;}
   if(areas.indexOf(name)>=0){toast('Área já existe','⚠️');return;}
-  areas.push(name);saveAreas();popSelects();sv('far',name);closeQuickAr();toast('Área "'+name+'" criada!','🏷');
+  areas.push(name);saveAreas();render();sv('far',name);closeQuickAr();toast('Área "'+name+'" criada!','🏷');
 };
 window.delArea=function(name){
   if(!confirm('Excluir área "'+name+'"?'))return;
@@ -1854,6 +2071,55 @@ function spawnRecurTask(t){
   saveTasks();sbUpsert&&sbUpsert('tasks',clone);
   toast('🔁 Recorrência criada: '+clone.name.slice(0,30),'🔁');
 }
+
+// ═══ BULK PROJ/AREA ═════════════════
+window.toggleSelPj=function(name,checked){
+  if(checked){if(selPjs.indexOf(name)<0)selPjs.push(name);}
+  else{selPjs=selPjs.filter(function(x){return x!==name;});}
+  renderProjMgr();
+};
+window.toggleAllPj=function(checked){
+  var allP=uniq(projects.map(function(p){return p.name;}).concat(tasks.map(function(t){return t.project;}))).filter(Boolean).sort();
+  selPjs=checked?allP.slice():[];
+  renderProjMgr();
+};
+window.bulkDelPjs=function(){
+  if(!selPjs.length)return;
+  var n=selPjs.length;
+  if(!confirm('Excluir '+n+' projeto(s)? As tarefas serão movidas para a lixeira.'))return;
+  selPjs.forEach(function(name){
+    tasks.filter(function(t){return t.project===name;}).forEach(function(t){
+      t.deletedAt=new Date().toISOString();trash.push(t);
+      if(_supa){sbDelete('tasks',t.id);sbUpsert('trash',t);}
+    });
+    tasks=tasks.filter(function(t){return t.project!==name;});
+    projects=projects.filter(function(p){return p.name!==name;});
+    if(_supa&&typeof sbDeleteProject==='function')sbDeleteProject(name);
+  });
+  saveTasks();saveProjects();saveTrash();
+  selPjs=[];toast(n+' projeto(s) excluído(s)','🗑');render();
+};
+window.toggleSelAr=function(name,checked){
+  if(checked){if(selArs.indexOf(name)<0)selArs.push(name);}
+  else{selArs=selArs.filter(function(x){return x!==name;});}
+  renderAreaMgr();
+};
+window.toggleAllAr=function(checked){
+  var _ar=uniq(areas.concat(tasks.map(function(t){return t.area||'';})).filter(Boolean)).sort();
+  selArs=checked?_ar.slice():[];
+  renderAreaMgr();
+};
+window.bulkDelArs=function(){
+  if(!selArs.length)return;
+  var n=selArs.length;
+  if(!confirm('Excluir '+n+' área(s)?'))return;
+  selArs.forEach(function(name){
+    tasks.forEach(function(t){if(t.area===name)t.area='';});
+    areas=areas.filter(function(a){return a!==name;});
+  });
+  saveTasks();saveAreas();
+  selArs=[];toast(n+' área(s) excluída(s)','🗑');render();
+};
 
 window.delTask=function(id){
   if(!confirm('Mover para a lixeira?'))return;
@@ -2068,6 +2334,61 @@ checkSession();
 // Load fresh data from Supabase only if already authed
 if(_authed&&_supa){loadFromSupabase().catch(function(){});}
 
+})();
+
+// ═══ COLUMN RESIZE (universal) ══════
+(function(){
+  var _startX,_startW,_th,_key,_col;
+  var SAVED_KEY='tf_col_w2';
+  function getSaved(){try{return JSON.parse(localStorage.getItem(SAVED_KEY)||'{}');}catch(ex){return {};}}
+  function saveW(key,w){try{var s=getSaved();s[key]=w;localStorage.setItem(SAVED_KEY,JSON.stringify(s));}catch(ex){}}
+  function applyAll(){
+    var saved=getSaved();
+    Object.keys(saved).forEach(function(k){
+      var w=saved[k];
+      document.documentElement.style.setProperty('--col-'+k,w+'px');
+      var col=document.getElementById('col-'+k);
+      if(col)col.style.width=w+'px';
+      document.querySelectorAll('th[data-col="'+k+'"]').forEach(function(th){th.style.width=w+'px';});
+    });
+  }
+  applyAll();
+  var _mo=new MutationObserver(function(muts){
+    var hasNew=muts.some(function(m){return m.addedNodes.length>0;});
+    if(hasNew)setTimeout(applyAll,20);
+  });
+  _mo.observe(document.body,{childList:true,subtree:true});
+  document.addEventListener('mousedown',function(e){
+    if(!e.target.classList.contains('col-resize'))return;
+    e.preventDefault();e.stopPropagation();
+    window._colResizing=true;
+    // Disable row dragging while resizing
+    document.querySelectorAll('tr[draggable]').forEach(function(r){r.setAttribute('data-dr',r.getAttribute('draggable'));r.removeAttribute('draggable');});
+    _th=e.target.closest('th');
+    if(!_th)return;
+    _key=_th.dataset.col;
+    if(!_key)return;
+    _col=document.getElementById('col-'+_key);
+    _startX=e.clientX;_startW=_th.offsetWidth;
+    e.target.classList.add('dragging');
+    document.body.style.cursor='col-resize';
+    document.body.style.userSelect='none';
+    document.addEventListener('mousemove',onMv);
+    document.addEventListener('mouseup',onUp);
+  });
+  function onMv(e){
+    var w=Math.max(60,_startW+(e.clientX-_startX));
+    if(_th)_th.style.width=w+'px';
+    if(_col)_col.style.width=w+'px';
+  }
+  function onUp(e){
+    var w=Math.max(60,_startW+(e.clientX-_startX));
+    document.querySelectorAll('.col-resize.dragging').forEach(function(el){el.classList.remove('dragging');});
+    document.body.style.cursor='';document.body.style.userSelect='';
+    document.removeEventListener('mousemove',onMv);
+    document.removeEventListener('mouseup',onUp);
+    if(_key)saveW(_key,w);
+  }
 })();
 </script>
 <!-- QUICK PROJECT MODAL -->
